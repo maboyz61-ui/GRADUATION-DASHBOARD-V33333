@@ -1,0 +1,55 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ukzn}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ukzn}
+      POSTGRES_DB: ${POSTGRES_DB:-ukzn}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ukzn}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: ./backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_DRIVER: postgres
+      DATABASE_URL: postgres://${POSTGRES_USER:-ukzn}:${POSTGRES_PASSWORD:-ukzn}@db:5432/${POSTGRES_DB:-ukzn}
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      STORAGE_DRIVER: ${STORAGE_DRIVER:-local}
+      STORAGE_LOCAL_DIR: /app/data/media
+      PAYFAST_MERCHANT_ID: ${PAYFAST_MERCHANT_ID:-10000100}
+      PAYFAST_MERCHANT_KEY: ${PAYFAST_MERCHANT_KEY:-46f0cd694581a}
+      PAYFAST_PASSPHRASE: ${PAYFAST_PASSPHRASE:-}
+      PAYFAST_SANDBOX: ${PAYFAST_SANDBOX:-true}
+      PAYFAST_NOTIFY_URL: ${PAYFAST_NOTIFY_URL:-http://localhost:8080/api/v1/payments/payfast/itn}
+      PAYFAST_RETURN_URL: ${PAYFAST_RETURN_URL:-http://localhost:8080/purchases}
+      PAYFAST_CANCEL_URL: ${PAYFAST_CANCEL_URL:-http://localhost:8080/purchases}
+    volumes:
+      - media-data:/app/data/media
+
+  web:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE: ${VITE_API_BASE:-}
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  db-data:
+  media-data:
